@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     }
 
     const targetParsed = new URL(fullUrl);
+    const isM3u8 = fullUrl.includes('.m3u8');
     const baseUrl = `${targetParsed.protocol}//${targetParsed.host}${targetParsed.pathname.substring(0, targetParsed.pathname.lastIndexOf('/') + 1)}`;
 
     // 净化请求头：删除可能透传的中国大陆 IP 标头，伪装为海外请求头以绕过源站 Geo-IP 拦截
@@ -25,22 +26,28 @@ export async function GET(request: Request) {
     proxyHeaders.set('Referer', 'https://olevod.com/');
     proxyHeaders.set('Origin', 'https://olevod.com');
     proxyHeaders.set('Accept', '*/*');
-    proxyHeaders.set('X-Forwarded-For', '103.21.244.1'); // 伪装海外 IP，绕过 Policy 检查
+    proxyHeaders.set('X-Forwarded-For', '103.21.244.1');
 
-    const response = await fetch(fullUrl, {
+    // 开启 Cloudflare 原生 CDN 边缘缓存 (cf: { cacheEverything: true })
+    const fetchOptions: RequestInit & { cf?: any } = {
       headers: proxyHeaders,
-      next: { revalidate: fullUrl.includes('.m3u8') ? 10 : 86400 }
-    });
+      cf: {
+        cacheEverything: true,
+        cacheTtl: isM3u8 ? 10 : 86400, // TS 视频切片在 Cloudflare 全球边缘节点强行缓存 24 小时
+        cacheEverythingByHeader: true,
+      }
+    };
+
+    const response = await fetch(fullUrl, fetchOptions);
 
     if (!response.ok) {
       return new Response(`Failed to proxy stream: ${response.status}`, { status: response.status });
     }
 
     const contentType = response.headers.get('content-type') || '';
-    const isM3u8 = fullUrl.includes('.m3u8') || contentType.includes('mpegurl') || contentType.includes('apple');
 
     // 1. M3U8 播放列表处理：重写内部所有 ts / key 切片链接
-    if (isM3u8) {
+    if (isM3u8 || contentType.includes('mpegurl') || contentType.includes('apple')) {
       const content = await response.text();
       const lines = content.split('\n');
       
@@ -67,25 +74,23 @@ export async function GET(request: Request) {
           'Content-Type': 'application/vnd.apple.mpegurl',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Cache-Control': 'public, max-age=10',
+          'Cache-Control': 'public, max-age=10, s-maxage=10',
         },
       });
     }
 
-    // 2. TS 视频切片文件处理
-    const body = response.body;
-    return new Response(body, {
+    // 2. TS 视频切片文件：开启浏览器与 CDN 的极速强缓存
+    return new Response(response.body, {
       status: 200,
       headers: {
         'Content-Type': contentType || 'video/mp2t',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Cache-Control': 'public, max-age=86400',
+        'Cache-Control': 'public, max-age=31536000, immutable', // 极致强缓存，切片瞬间读取
       },
     });
 
   } catch (error: any) {
-    console.error('M3U8 Worker Proxy Error:', error);
     return new Response(`Edge Proxy Error: ${error.message}`, { status: 500 });
   }
 }
