@@ -11,7 +11,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 补全协议相对 URL (如 //cdn.com/stream.m3u8)
     let fullUrl = targetUrl;
     if (fullUrl.startsWith('//')) {
       fullUrl = `https:${fullUrl}`;
@@ -20,13 +19,17 @@ export async function GET(request: Request) {
     const targetParsed = new URL(fullUrl);
     const baseUrl = `${targetParsed.protocol}//${targetParsed.host}${targetParsed.pathname.substring(0, targetParsed.pathname.lastIndexOf('/') + 1)}`;
 
+    // 净化请求头：删除可能透传的中国大陆 IP 标头，伪装为海外请求头以绕过源站 Geo-IP 拦截
+    const proxyHeaders = new Headers();
+    proxyHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+    proxyHeaders.set('Referer', 'https://olevod.com/');
+    proxyHeaders.set('Origin', 'https://olevod.com');
+    proxyHeaders.set('Accept', '*/*');
+    proxyHeaders.set('X-Forwarded-For', '103.21.244.1'); // 伪装海外 IP，绕过 Policy 检查
+
     const response = await fetch(fullUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-        'Referer': `${targetParsed.protocol}//${targetParsed.host}/`,
-        'Accept': '*/*',
-      },
-      next: { revalidate: fullUrl.includes('.m3u8') ? 10 : 86400 } // ts切片可缓存1天，m3u8缓存10秒
+      headers: proxyHeaders,
+      next: { revalidate: fullUrl.includes('.m3u8') ? 10 : 86400 }
     });
 
     if (!response.ok) {
@@ -36,19 +39,17 @@ export async function GET(request: Request) {
     const contentType = response.headers.get('content-type') || '';
     const isM3u8 = fullUrl.includes('.m3u8') || contentType.includes('mpegurl') || contentType.includes('apple');
 
-    // 1. 如果是 M3U8 文本索引文件：重写内部所有切片和子播放列表的 URL 走 Worker 代理
+    // 1. M3U8 播放列表处理：重写内部所有 ts / key 切片链接
     if (isM3u8) {
       const content = await response.text();
       const lines = content.split('\n');
       
       const rewrittenLines = lines.map(line => {
         const trimmed = line.trim();
-        // 忽略空行和以 # 开头的 M3U8 标签（除 #EXT-X-KEY 外）
         if (!trimmed || (trimmed.startsWith('#') && !trimmed.startsWith('#EXT-X-KEY'))) {
           return line;
         }
 
-        // 处理加密 Key URL (#EXT-X-KEY:METHOD=AES-128,URI="...")
         if (trimmed.startsWith('#EXT-X-KEY')) {
           return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
             const absoluteKeyUrl = uri.startsWith('http') ? uri : new URL(uri, baseUrl).toString();
@@ -56,7 +57,6 @@ export async function GET(request: Request) {
           });
         }
 
-        // 处理 .ts 切片或子 .m3u8 的绝对/相对 URL
         const absoluteSegmentUrl = trimmed.startsWith('http') ? trimmed : new URL(trimmed, baseUrl).toString();
         return `${origin}/api/proxy-m3u8?url=${encodeURIComponent(absoluteSegmentUrl)}`;
       });
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // 2. 如果是 .ts 视频切片或二进制数据：直接通过 Worker 将字节流管道透传，补全 CORS 跨域头
+    // 2. TS 视频切片文件处理
     const body = response.body;
     return new Response(body, {
       status: 200,
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
         'Content-Type': contentType || 'video/mp2t',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Cache-Control': 'public, max-age=86400', // Worker 节点缓存 24 小时切片
+        'Cache-Control': 'public, max-age=86400',
       },
     });
 
