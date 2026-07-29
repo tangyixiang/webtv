@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export const runtime = 'edge';
 
 // 抓取单个类目的通用工具函数
-async function fetchCategoryItems(typeId: string, limit = 12) {
+async function fetchCategoryItems(origin: string, typeId: string, limit = 12) {
   const targetUrl = typeId === 'home' 
     ? 'https://olevod.com/index.html' 
     : `https://olevod.com/index.php/vod/type/id/${typeId}.html`;
@@ -38,10 +38,13 @@ async function fetchCategoryItems(typeId: string, limit = 12) {
         img = `https://olevod.com${img}`;
       }
 
+      // 将封面图片 URL 包装为通过 Cloudflare Workers /api/proxy-img 边缘代理！
+      const proxiedImg = `${origin}/api/proxy-img?url=${encodeURIComponent(img)}`;
+
       videoList.push({
         id,
         title: title.trim(),
-        img,
+        img: proxiedImg,
         playUrl: `/play/${id}`,
         score: (8.0 + (parseInt(id) % 15) * 0.1).toFixed(1)
       });
@@ -54,7 +57,7 @@ async function fetchCategoryItems(typeId: string, limit = 12) {
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams, origin } = new URL(request.url);
   const type = searchParams.get('type');
   const page = searchParams.get('page') || '1';
   const wd = searchParams.get('wd');
@@ -62,11 +65,11 @@ export async function GET(request: Request) {
   // 如果没有分类参数且没有搜索词，说明是【首页模式】，按版块分组并行抓取
   if (!type && !wd) {
     const [shortDramas, movies, series, variety, anime] = await Promise.all([
-      fetchCategoryItems('1207', 6), // 短剧
-      fetchCategoryItems('1', 12),   // 电影
-      fetchCategoryItems('2', 12),   // 电视剧
-      fetchCategoryItems('3', 6),    // 综艺
-      fetchCategoryItems('4', 6),    // 动漫
+      fetchCategoryItems(origin, '1207', 6), // 短剧
+      fetchCategoryItems(origin, '1', 12),   // 电影
+      fetchCategoryItems(origin, '2', 12),   // 电视剧
+      fetchCategoryItems(origin, '3', 6),    // 综艺
+      fetchCategoryItems(origin, '4', 6),    // 动漫
     ]);
 
     return NextResponse.json({
@@ -124,10 +127,13 @@ export async function GET(request: Request) {
         img = `https://olevod.com${img}`;
       }
 
+      // 将封面图片 URL 包装为通过 Cloudflare Workers /api/proxy-img 边缘代理！
+      const proxiedImg = `${origin}/api/proxy-img?url=${encodeURIComponent(img)}`;
+
       videoList.push({
         id,
         title: title.trim(),
-        img,
+        img: proxiedImg,
         playUrl: `/play/${id}`,
         score: (8.0 + (parseInt(id) % 15) * 0.1).toFixed(1)
       });
