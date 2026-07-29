@@ -1,0 +1,125 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+export default function Navbar() {
+  const router = useRouter();
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [searchWd, setSearchWd] = useState('');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchWd.trim()) return;
+    router.push(`/?wd=${encodeURIComponent(searchWd.trim())}`);
+  };
+
+  return (
+    <nav className="glass-nav fixed top-0 w-full z-50 transition-all duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Main Navbar Row */}
+        <div className="flex items-center justify-between h-16">
+          
+          {/* Logo & Category Navigation */}
+          <div className="flex items-center space-x-3 md:space-x-8">
+            <Link href="/" className="flex-shrink-0">
+              <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                webtv
+              </span>
+            </Link>
+            
+            {/* Desktop Nav Links */}
+            <div className="hidden md:block">
+              <div className="flex items-baseline space-x-1 lg:space-x-2">
+                <Link href="/" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  首页
+                </Link>
+                <Link href="/?type=1207" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  短剧
+                </Link>
+                <Link href="/?type=1" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  电影
+                </Link>
+                <Link href="/?type=2" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  电视剧
+                </Link>
+                <Link href="/?type=3" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  综艺
+                </Link>
+                <Link href="/?type=4" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  动漫
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop Search Form */}
+          <div className="hidden md:block">
+            <form onSubmit={handleSearchSubmit} className="relative">
+              <input 
+                type="text" 
+                value={searchWd}
+                onChange={(e) => setSearchWd(e.target.value)}
+                placeholder="搜索你想看的影片..." 
+                className="bg-slate-800/80 border border-slate-700 text-sm rounded-full px-4 py-1.5 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all w-56" 
+              />
+              <button type="submit" className="absolute right-2.5 top-2 text-gray-400 hover:text-white cursor-pointer">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+            </form>
+          </div>
+
+          {/* Mobile Right Controls: Categories + Search Toggle */}
+          <div className="flex md:hidden items-center space-x-1.5 overflow-x-auto py-2">
+            <Link href="/?type=1207" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">短剧</Link>
+            <Link href="/?type=1" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">电影</Link>
+            <Link href="/?type=2" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">剧集</Link>
+            <Link href="/?type=3" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">综艺</Link>
+            <Link href="/?type=4" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">动漫</Link>
+            
+            {/* Mobile Search Toggle Button */}
+            <button 
+              onClick={() => setShowMobileSearch(!showMobileSearch)}
+              className="p-1.5 bg-blue-600/80 text-white rounded-md flex-shrink-0 cursor-pointer ml-1"
+              aria-label="搜索"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          </div>
+
+        </div>
+
+        {/* Mobile Search Input Dropdown Bar */}
+        {showMobileSearch && (
+          <div className="md:hidden pb-3 pt-1 border-t border-slate-800/60 animate-fadeIn">
+            <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+              <input 
+                type="text" 
+                value={searchWd}
+                onChange={(e) => setSearchWd(e.target.value)}
+                placeholder="全网搜索片名、演员、关键字..." 
+                className="w-full bg-slate-900 border border-blue-500/50 text-sm rounded-lg pl-3 pr-10 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                autoFocus
+              />
+              <button 
+                type="submit" 
+                className="absolute right-2 text-blue-400 hover:text-white p-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+            </form>
+          </div>
+        )}
+
+      </div>
+    </nav>
+  );
+}
