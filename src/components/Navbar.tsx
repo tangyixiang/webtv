@@ -1,18 +1,15 @@
-'use client';
-
-import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 export default function Navbar() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [searchWd, setSearchWd] = useState('');
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchWd.trim()) return;
-    router.push(`/?wd=${encodeURIComponent(searchWd.trim())}`);
+    navigate(`/?wd=${encodeURIComponent(searchWd.trim())}`);
   };
 
   return (
@@ -24,7 +21,7 @@ export default function Navbar() {
           
           {/* Logo & Category Navigation */}
           <div className="flex items-center space-x-3 md:space-x-8">
-            <Link href="/" className="flex-shrink-0">
+            <Link to="/" className="flex-shrink-0">
               <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
                 webtv
               </span>
@@ -33,22 +30,22 @@ export default function Navbar() {
             {/* Desktop Nav Links */}
             <div className="hidden md:block">
               <div className="flex items-baseline space-x-1 lg:space-x-2">
-                <Link href="/" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                <Link to="/" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   首页
                 </Link>
-                <Link href="/?type=1207" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                <Link to="/?type=1207" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   短剧
                 </Link>
-                <Link href="/?type=1" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                <Link to="/?type=1" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   电影
                 </Link>
-                <Link href="/?type=2" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                <Link to="/?type=2" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   电视剧
                 </Link>
-                <Link href="/?type=3" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                <Link to="/?type=3" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   综艺
                 </Link>
-                <Link href="/?type=4" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                <Link to="/?type=4" className="text-gray-300 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   动漫
                 </Link>
               </div>
@@ -73,15 +70,14 @@ export default function Navbar() {
             </form>
           </div>
 
-          {/* Mobile Right Controls: Categories + Search Toggle */}
+          {/* Mobile Right Controls */}
           <div className="flex md:hidden items-center space-x-1.5 overflow-x-auto py-2">
-            <Link href="/?type=1207" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">短剧</Link>
-            <Link href="/?type=1" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">电影</Link>
-            <Link href="/?type=2" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">剧集</Link>
-            <Link href="/?type=3" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">综艺</Link>
-            <Link href="/?type=4" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">动漫</Link>
+            <Link to="/?type=1207" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">短剧</Link>
+            <Link to="/?type=1" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">电影</Link>
+            <Link to="/?type=2" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">剧集</Link>
+            <Link to="/?type=3" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">综艺</Link>
+            <Link to="/?type=4" className="text-xs bg-slate-800 px-2 py-1 rounded text-gray-300 whitespace-nowrap">动漫</Link>
             
-            {/* Mobile Search Toggle Button */}
             <button 
               onClick={() => setShowMobileSearch(!showMobileSearch)}
               className="p-1.5 bg-blue-600/80 text-white rounded-md flex-shrink-0 cursor-pointer ml-1"
@@ -95,7 +91,7 @@ export default function Navbar() {
 
         </div>
 
-        {/* Mobile Search Input Dropdown Bar */}
+        {/* Mobile Search Bar */}
         {showMobileSearch && (
           <div className="md:hidden pb-3 pt-1 border-t border-slate-800/60 animate-fadeIn">
             <form onSubmit={handleSearchSubmit} className="relative flex items-center">
