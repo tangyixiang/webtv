@@ -1,11 +1,6 @@
-'use client';
-
-export const runtime = 'edge';
-
-import { useEffect, useState, use, Suspense } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import VideoPlayer from '../../components/VideoPlayer';
+import { useEffect, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import VideoPlayer from '../components/VideoPlayer';
 
 interface Episode {
   name: string;
@@ -22,8 +17,9 @@ interface VideoDetail {
   playlist: Episode[];
 }
 
-function PlayContent({ id }: { id: string }) {
-  const searchParams = useSearchParams();
+export default function PlayPage() {
+  const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const initialSid = searchParams.get('sid') || '1';
   const initialNid = searchParams.get('nid') || '1';
   
@@ -36,10 +32,11 @@ function PlayContent({ id }: { id: string }) {
   // 初次加载影片信息
   useEffect(() => {
     async function loadVideoDetails() {
+      if (!id) return;
       setLoading(true);
       try {
         const res = await fetch(`/api/video/${id}?sid=${initialSid}&nid=${initialNid}`);
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data.success) {
           setVideoData(data);
           setActiveSid(data.currentSid || initialSid);
@@ -55,21 +52,21 @@ function PlayContent({ id }: { id: string }) {
     loadVideoDetails();
   }, [id, initialSid, initialNid]);
 
-  // 后台无刷新切换集数 (AJAX / Background Fetch)
+  // 后台无刷新切换集数
   const handleSwitchEpisode = async (episode: Episode) => {
+    if (!id) return;
     if (episode.sid === activeSid && episode.nid === activeNid) return;
     
     setSwitchingEpisode(true);
     setActiveSid(episode.sid);
     setActiveNid(episode.nid);
 
-    // 优雅更新浏览器 URL 地址栏而不触发页面重新渲染/加载
     const newUrl = `/play/${id}?sid=${episode.sid}&nid=${episode.nid}`;
     window.history.replaceState(null, '', newUrl);
 
     try {
       const res = await fetch(`/api/video/${id}?sid=${episode.sid}&nid=${episode.nid}`);
-      const data = await res.json();
+      const data = (await res.json()) as any;
       if (data.success && videoData) {
         setVideoData({
           ...videoData,
@@ -99,14 +96,13 @@ function PlayContent({ id }: { id: string }) {
       <div className="min-h-screen bg-slate-950 pt-24 pb-12 text-center flex flex-col items-center justify-center p-4">
         <h2 className="text-xl font-bold text-white mb-2">获取视频失败</h2>
         <p className="text-gray-400 mb-6">暂时无法获取到该视频的数据流，请返回首页重试。</p>
-        <Link href="/" className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors text-sm">
+        <Link to="/" className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors text-sm">
           返回首页
         </Link>
       </div>
     );
   }
 
-  // 当前播放的集数名称
   const currentEpisodeObj = videoData.playlist.find(ep => ep.nid === activeNid && ep.sid === activeSid);
   const currentEpisodeName = currentEpisodeObj ? currentEpisodeObj.name : `第${activeNid}集`;
 
@@ -116,7 +112,7 @@ function PlayContent({ id }: { id: string }) {
         
         {/* Breadcrumbs */}
         <div className="text-gray-400 text-xs md:text-sm mb-4 flex items-center space-x-2">
-          <Link href="/" className="hover:text-blue-500 transition-colors">首页</Link>
+          <Link to="/" className="hover:text-blue-500 transition-colors">首页</Link>
           <span>/</span>
           <span className="text-gray-200 truncate max-w-[200px]">{videoData.title}</span>
           <span>/</span>
@@ -154,7 +150,7 @@ function PlayContent({ id }: { id: string }) {
                 <span>共 {videoData.playlist.length} 集</span>
               </div>
               <p className="text-gray-300 text-xs md:text-sm leading-relaxed">
-                点击右侧集数按钮可实现后台后台无缝切换，无需刷新全页。播放卡顿可尝试刷新页面。
+                点击右侧集数按钮可实现后台无缝切换，无需刷新全页。播放卡顿可尝试刷新页面。
               </p>
             </div>
           </div>
@@ -196,14 +192,5 @@ function PlayContent({ id }: { id: string }) {
 
       </div>
     </div>
-  );
-}
-
-export default function PlayPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950 pt-24 text-center text-gray-400">加载剧集...</div>}>
-      <PlayContent id={id} />
-    </Suspense>
   );
 }
