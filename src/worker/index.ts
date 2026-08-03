@@ -2,6 +2,20 @@ import { Hono } from 'hono';
 
 const app = new Hono();
 
+// API 鉴权中间件：校验密码凭证 'tyx'
+app.use('/api/*', async (c, next) => {
+  const cookieHeader = c.req.header('Cookie') || '';
+  const authCookie = cookieHeader.split(';').find(item => item.trim().startsWith('webtv_auth='));
+  const authHeader = c.req.header('Authorization');
+  const token = authCookie ? authCookie.split('=')[1].trim() : (authHeader ? authHeader.replace('Bearer ', '').trim() : '');
+
+  if (token !== 'tyx') {
+    return c.json({ success: false, error: 'Unauthorized: 请先登录' }, 401);
+  }
+
+  await next();
+});
+
 
 const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
 

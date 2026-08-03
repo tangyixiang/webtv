@@ -52,8 +52,8 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Desktop Search Form */}
-          <div className="hidden md:block">
+          {/* Desktop Search Form & Logout */}
+          <div className="hidden md:flex items-center space-x-3">
             <form onSubmit={handleSearchSubmit} className="relative">
               <input 
                 type="text" 
@@ -68,6 +68,18 @@ export default function Navbar() {
                 </svg>
               </button>
             </form>
+
+            <button
+              onClick={() => {
+                localStorage.removeItem('webtv_auth');
+                document.cookie = 'webtv_auth=; path=/; max-age=0';
+                navigate('/login');
+              }}
+              className="text-xs text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/50 px-2.5 py-1.5 rounded-full transition-all cursor-pointer whitespace-nowrap"
+              title="退出登录"
+            >
+              退出
+            </button>
           </div>
 
           {/* Mobile Right Controls */}
@@ -86,6 +98,17 @@ export default function Navbar() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
+            </button>
+
+            <button
+              onClick={() => {
+                localStorage.removeItem('webtv_auth');
+                document.cookie = 'webtv_auth=; path=/; max-age=0';
+                navigate('/login');
+              }}
+              className="text-xs bg-rose-950/40 text-rose-300 border border-rose-800/40 px-2 py-1 rounded whitespace-nowrap ml-1"
+            >
+              退出
             </button>
           </div>
 
