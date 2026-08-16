@@ -3,8 +3,21 @@ import { build4kvmPlayUrl } from './wasm-signer';
 
 const app = new Hono();
 
-// API 鉴权中间件：校验密码凭证 'tyx'
+// 统一跨域处理中间件
+app.use('*', async (c, next) => {
+  await next();
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+});
+
+// API 鉴权中间件：校验密码凭证 'tyx'（排除媒体分片代理与预检请求）
 app.use('/api/*', async (c, next) => {
+  const path = c.req.path;
+  if (c.req.method === 'OPTIONS' || path.startsWith('/api/proxy-img') || path.startsWith('/api/proxy-m3u8')) {
+    return next();
+  }
+
   const cookieHeader = c.req.header('Cookie') || '';
   const authCookie = cookieHeader.split(';').find(item => item.trim().startsWith('webtv_auth='));
   const authHeader = c.req.header('Authorization');
@@ -308,7 +321,6 @@ async function fetch4kvmSearch(origin: string, wd: string, page = '1'): Promise<
       if (img.startsWith('//')) img = `https:${img}`;
       const proxiedImg = `${origin}/api/proxy-img?url=${encodeURIComponent(img)}`;
 
-      // 提取年份与 4k 标识
       const cardSegment = match[0];
       const yearMatch = cardSegment.match(/top-2\s+left-2[^>]*>\s*(\d{4})\s*</);
       const year = yearMatch ? yearMatch[1] : undefined;
@@ -365,24 +377,19 @@ async function fetch4kvmDetail(origin: string, id: string, nid = '1', sid = '1')
   }
 
   // 3. 提取选集列表
-  const epRegex = /<a\s+[^>]*href="\/play\/([a-zA-Z0-9]+)"[^>]*dataid="(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
-  let m;
   const playlist: Array<{ name: string; id: string; dataid: string; nid: string; sid: string }> = [];
   const seenSlugs = new Set<string>();
 
+  // 方式 A：正则匹配带有 dataid 的选集标签
+  const epRegex = /<a\s+[^>]*href="\/play\/([a-zA-Z0-9]+)"[^>]*dataid="(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
   while ((m = epRegex.exec(html)) !== null) {
     const [, epSlug, dataid, innerHtml] = m;
     if (seenSlugs.has(epSlug)) continue;
     seenSlugs.add(epSlug);
 
     const spanMatch = innerHtml.match(/<span[^>]*>([\s\S]*?)<\/span>/);
-    let epName = '';
-    if (spanMatch) {
-      epName = spanMatch[1].replace(/<[^>]+>/g, '').trim();
-    }
-    if (!epName) {
-      epName = innerHtml.replace(/<[^>]+>/g, '').trim();
-    }
+    let epName = spanMatch ? spanMatch[1].replace(/<[^>]+>/g, '').trim() : innerHtml.replace(/<[^>]+>/g, '').trim();
     if (!epName || epName.length > 20) {
       epName = `第${playlist.length + 1}集`;
     } else if (/^\d+$/.test(epName)) {
@@ -398,27 +405,42 @@ async function fetch4kvmDetail(origin: string, id: string, nid = '1', sid = '1')
     });
   }
 
+  // 方式 B：若方式 A 未匹配到，通过 handleEpisodeClick 匹配
+  if (playlist.length === 0) {
+    const clickRegex = /href="\/play\/([a-zA-Z0-9]+)"[\s\S]*?handleEpisodeClick\([^,]+,\s*'(\d+)'/g;
+    while ((m = clickRegex.exec(html)) !== null) {
+      const [, epSlug, dataid] = m;
+      if (seenSlugs.has(epSlug)) continue;
+      seenSlugs.add(epSlug);
+      playlist.push({
+        id: epSlug,
+        dataid,
+        nid: String(playlist.length + 1),
+        sid: '1',
+        name: `第${playlist.length + 1}集`,
+      });
+    }
+  }
+
   // 4. 定位当前集与 dataid
   let activeEpisode = playlist.find(p => p.id === id);
   if (!activeEpisode) {
     activeEpisode = playlist.find(p => p.nid === nid) || playlist[0];
   }
 
-  const currentDataid = activeEpisode?.dataid || '0';
+  let currentDataid = activeEpisode?.dataid;
+  if (!currentDataid) {
+    const fallbackDataid = html.match(/dataid="(\d+)"/) || html.match(/data-v-id="(\d+)"/) || html.match(/handleEpisodeClick\([^,]+,\s*'(\d+)'/);
+    currentDataid = fallbackDataid ? fallbackDataid[1] : '0';
+  }
   const currentSecretKey = activeEpisode?.id || id;
   const currentNid = activeEpisode?.nid || nid;
 
-  // 5. Wasm 生成签名播放 URL
-  let signedPlayPath = '';
-  try {
-    signedPlayPath = await build4kvmPlayUrl(currentDataid, currentSecretKey, '1080', userlink, nbSt);
-  } catch (e: any) {
-    console.error('Wasm sign failed:', e);
-  }
-
+  // 5. Wasm 生成签名播放 URL 并换取超清流
   let rawVideoUrl = '';
-  if (signedPlayPath) {
-    try {
+  try {
+    const signedPlayPath = await build4kvmPlayUrl(currentDataid, currentSecretKey, '1080', userlink, nbSt);
+    if (signedPlayPath) {
       const fullPlayApiUrl = `https://www.4kvm.net${signedPlayPath}`;
       const playApiRes = await fetch(fullPlayApiUrl, {
         headers: {
@@ -433,14 +455,13 @@ async function fetch4kvmDetail(origin: string, id: string, nid = '1', sid = '1')
         if (playJson.code === 200 && playJson.data?.quality_urls) {
           const unlocked = playJson.data.quality_urls.filter((q: any) => !q.locked && q.url && q.url.startsWith('http'));
           if (unlocked.length > 0) {
-            // 优先选择 1080p 或最高可用流
             rawVideoUrl = unlocked[unlocked.length - 1].url;
           }
         }
       }
-    } catch (err) {
-      console.error('Failed to fetch 4kvm stream JSON:', err);
     }
+  } catch (err) {
+    console.error('Failed to get 4kvm stream:', err);
   }
 
   const proxiedVideoUrl = rawVideoUrl ? `${origin}/api/proxy-m3u8?url=${encodeURIComponent(rawVideoUrl)}` : '';
@@ -608,11 +629,12 @@ app.get('/api/proxy-img', async (c) => {
       'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
     };
 
-    if (fullUrl.includes('olevod.com')) {
+    if (fullUrl.includes('olevod.com') || fullUrl.includes('olelive')) {
       headers['Referer'] = 'https://olevod.com/';
-    } else if (fullUrl.includes('4kvm') || fullUrl.includes('baidu.com') || fullUrl.includes('staticimgjs.org')) {
+    } else if (fullUrl.includes('4kvm.net') || fullUrl.includes('4kvm.site')) {
       headers['Referer'] = 'https://www.4kvm.net/';
     }
+    // 对 baidu, staticimgjs, tmdb 等开放图床不添加违规 Referer
 
     const res = await fetch(fullUrl, { headers });
     if (!res.ok) {
@@ -634,7 +656,7 @@ app.get('/api/proxy-img', async (c) => {
   }
 });
 
-// /api/proxy-m3u8 - M3U8 及视频切片代理
+// /api/proxy-m3u8 - M3U8 及视频切片代理（解除防盗链与切片重写）
 app.get('/api/proxy-m3u8', async (c) => {
   const url = new URL(c.req.url);
   const origin = url.origin;
@@ -657,14 +679,17 @@ app.get('/api/proxy-m3u8', async (c) => {
     const proxyHeaders = new Headers();
     proxyHeaders.set('User-Agent', USER_AGENT);
     proxyHeaders.set('Accept', '*/*');
-    proxyHeaders.set('X-Forwarded-For', '103.21.244.1');
 
-    if (fullUrl.includes('douyinbit.com') || fullUrl.includes('4kvm')) {
+    // 精确设置 Referer：针对不同 CDN 采用白名单策略
+    if (fullUrl.includes('olevod.com') || fullUrl.includes('olelive') || fullUrl.includes('olevod')) {
+      proxyHeaders.set('Referer', 'https://olevod.com/');
+      proxyHeaders.set('Origin', 'https://olevod.com');
+    } else if (fullUrl.includes('4kvm.net') || fullUrl.includes('4kvm.site')) {
       proxyHeaders.set('Referer', 'https://www.4kvm.net/');
       proxyHeaders.set('Origin', 'https://www.4kvm.net');
     } else {
-      proxyHeaders.set('Referer', 'https://olevod.com/');
-      proxyHeaders.set('Origin', 'https://olevod.com');
+      // 对国内开放 CDN (如 xhscdn, douyinbit, alicdn, qcloud, byteimg 等)，不发送防盗链 Referer
+      proxyHeaders.set('Referer', '');
     }
 
     const fetchOptions: RequestInit & { cf?: any } = {
@@ -710,7 +735,8 @@ app.get('/api/proxy-m3u8', async (c) => {
         headers: {
           'Content-Type': 'application/vnd.apple.mpegurl',
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': '*',
           'Cache-Control': 'public, max-age=10, s-maxage=10',
         },
       });
@@ -721,7 +747,8 @@ app.get('/api/proxy-m3u8', async (c) => {
       headers: {
         'Content-Type': contentType || 'video/mp2t',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });

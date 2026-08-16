@@ -15,6 +15,11 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
     const container = containerRef.current;
     if (!container) return;
 
+    if (!src) {
+      setError('该视频流地址解析中或该源暂未提供有效播放流，请尝试点击【🔄 搜索换源】更换其他源播放');
+      return;
+    }
+
     setError(null);
 
     try {
@@ -27,8 +32,12 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
         container,
         url: src,
         type: 'm3u8',
+        moreVideoAttr: {
+          crossOrigin: 'anonymous',
+        },
         customType: {
           m3u8: function (video, url, artInstance) {
+            video.setAttribute('referrerpolicy', 'no-referrer');
             // 1. 原生 HLS (Safari/iOS)
             if (video.canPlayType('application/vnd.apple.mpegurl')) {
               video.src = url;
@@ -97,7 +106,7 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
                       hls.recoverMediaError();
                       break;
                     default:
-                      (artInstance as any).notice?.show?.('视频播放异常，点击右侧重新加载');
+                      (artInstance as any).notice?.show?.('视频播放异常，点击右上角重新加载');
                       break;
                   }
                 }
@@ -161,14 +170,19 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
   return (
     <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 shadow-2xl">
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 z-30 p-4 text-center">
-          <p className="text-amber-400 font-medium mb-3">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition-all cursor-pointer"
-          >
-            刷新页面
-          </button>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 z-30 p-6 text-center">
+          <svg className="w-10 h-10 text-amber-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-amber-300 font-medium mb-4 max-w-md text-sm leading-relaxed">{error}</p>
+          <div className="flex space-x-3">
+            <button 
+              onClick={() => window.location.reload()} 
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition-all cursor-pointer shadow"
+            >
+              刷新重试
+            </button>
+          </div>
         </div>
       )}
 
