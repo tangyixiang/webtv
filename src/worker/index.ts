@@ -452,10 +452,17 @@ async function fetch4kvmDetail(origin: string, id: string, nid = '1', sid = '1')
 
       if (playApiRes.ok) {
         const playJson = (await playApiRes.json()) as any;
-        if (playJson.code === 200 && playJson.data?.quality_urls) {
-          const unlocked = playJson.data.quality_urls.filter((q: any) => !q.locked && q.url && q.url.startsWith('http'));
-          if (unlocked.length > 0) {
-            rawVideoUrl = unlocked[unlocked.length - 1].url;
+        if (playJson.code === 200 && playJson.data) {
+          if (playJson.data.url && typeof playJson.data.url === 'string' && playJson.data.url.startsWith('http')) {
+            rawVideoUrl = playJson.data.url;
+          } else if (Array.isArray(playJson.data.quality_urls)) {
+            const unlocked = playJson.data.quality_urls.filter((q: any) => !q.locked && q.url && (q.url.startsWith('http') || q.url.startsWith('//')));
+            if (unlocked.length > 0) {
+              rawVideoUrl = unlocked[unlocked.length - 1].url;
+              if (rawVideoUrl.startsWith('//')) {
+                rawVideoUrl = `https:${rawVideoUrl}`;
+              }
+            }
           }
         }
       }
