@@ -749,10 +749,23 @@ app.get('/api/proxy-m3u8', async (c) => {
       });
     }
 
-    return new Response(response.body, {
+    const rawBuffer = new Uint8Array(await response.arrayBuffer());
+    let outputBuffer: Uint8Array = rawBuffer;
+
+    // 自动检测并剥离图片伪装头（如 4KVM / ICVE / Douyinbit 等切片的 73 字节 PNG 伪装头）
+    if (rawBuffer.length > 188 * 2 && rawBuffer[0] !== 0x47) {
+      for (let i = 0; i < Math.min(rawBuffer.length - 188 * 2, 2048); i++) {
+        if (rawBuffer[i] === 0x47 && rawBuffer[i + 188] === 0x47 && rawBuffer[i + 188 * 2] === 0x47) {
+          outputBuffer = rawBuffer.subarray(i);
+          break;
+        }
+      }
+    }
+
+    return new Response(outputBuffer as any, {
       status: 200,
       headers: {
-        'Content-Type': contentType || 'video/mp2t',
+        'Content-Type': 'video/mp2t',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
         'Access-Control-Allow-Headers': '*',
