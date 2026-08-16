@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { build4kvmPlayUrl } from './wasm-signer';
 
 const app = new Hono();
 
@@ -16,26 +17,36 @@ app.use('/api/*', async (c, next) => {
   await next();
 });
 
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
+export interface VideoCard {
+  id: string;
+  title: string;
+  img: string;
+  playUrl: string;
+  score: string;
+  source: 'olevod' | '4kvm';
+  sourceName: string;
+  badge: string;
+  year?: string;
+}
 
-// 抓取单个类目的通用工具函数
-async function fetchCategoryItems(origin: string, typeId: string, limit = 12) {
-  const targetUrl = typeId === 'home' 
-    ? 'https://olevod.com/index.html' 
+// -------------------------------------------------------------
+// 1. 欧乐影视 (Olevod) 解析模块
+// -------------------------------------------------------------
+async function fetchOlevodCategoryItems(origin: string, typeId: string, limit = 12): Promise<VideoCard[]> {
+  const targetUrl = typeId === 'home'
+    ? 'https://olevod.com/index.html'
     : `https://olevod.com/index.php/vod/type/id/${typeId}.html`;
 
   try {
     const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
+      headers: { 'User-Agent': USER_AGENT },
     });
-
     if (!res.ok) return [];
 
     const html = await res.text();
-    const videoList: Array<{ id: string; title: string; img: string; playUrl: string; score: string }> = [];
+    const videoList: VideoCard[] = [];
     const seenIds = new Set<string>();
 
     const cardRegex = /<a\s+class="[^"]*(?:vodlist_thumb|zbvodlist_box)[^"]*"\s+[^>]*href="([^"]+)"\s+title="([^"]+)"\s+data-original="([^"]+)"/g;
@@ -60,8 +71,11 @@ async function fetchCategoryItems(origin: string, typeId: string, limit = 12) {
         id,
         title: title.trim(),
         img: proxiedImg,
-        playUrl: `/play/${id}`,
-        score: (8.0 + (parseInt(id) % 15) * 0.1).toFixed(1)
+        playUrl: `/play/${id}?source=olevod`,
+        score: (8.0 + (parseInt(id) % 15) * 0.1).toFixed(1),
+        source: 'olevod',
+        sourceName: '欧乐影视',
+        badge: 'HD',
       });
     }
 
@@ -71,58 +85,16 @@ async function fetchCategoryItems(origin: string, typeId: string, limit = 12) {
   }
 }
 
-// 1. /api/videos - 视频列表与分类/搜索
-app.get('/api/videos', async (c) => {
-  const url = new URL(c.req.url);
-  const origin = url.origin;
-  const type = c.req.query('type');
-  const page = c.req.query('page') || '1';
-  const wd = c.req.query('wd');
-
-  if (!type && !wd) {
-    const [shortDramas, movies, series, variety, anime] = await Promise.all([
-      fetchCategoryItems(origin, '1207', 6), // 短剧
-      fetchCategoryItems(origin, '1', 12),   // 电影
-      fetchCategoryItems(origin, '2', 12),   // 电视剧
-      fetchCategoryItems(origin, '3', 6),    // 综艺
-      fetchCategoryItems(origin, '4', 6),    // 动漫
-    ]);
-
-    return c.json({
-      success: true,
-      isHome: true,
-      sections: [
-        { typeId: '1207', title: '🔥 热门微短剧', data: shortDramas },
-        { typeId: '1', title: '🎬 热门电影推荐', data: movies },
-        { typeId: '2', title: '📺 热门电视剧场', data: series },
-        { typeId: '3', title: '🎪 精彩综艺热播', data: variety },
-        { typeId: '4', title: '✨ 热门动漫推荐', data: anime },
-      ]
-    });
-  }
-
-  let targetUrl = 'https://olevod.com/index.html';
-  if (wd) {
-    targetUrl = `https://olevod.com/index.php/vod/search/page/${page}/wd/${encodeURIComponent(wd)}.html`;
-  } else if (type) {
-    targetUrl = page !== '1'
-      ? `https://olevod.com/index.php/vod/show/id/${type}/page/${page}.html`
-      : `https://olevod.com/index.php/vod/show/id/${type}.html`;
-  }
-
+async function fetchOlevodSearch(origin: string, wd: string, page = '1'): Promise<VideoCard[]> {
+  const targetUrl = `https://olevod.com/index.php/vod/search/page/${page}/wd/${encodeURIComponent(wd)}.html`;
   try {
     const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
+      headers: { 'User-Agent': USER_AGENT },
     });
-
-    if (!response.ok) {
-      throw new Error(`Source site status: ${response.status}`);
-    }
+    if (!response.ok) return [];
 
     const html = await response.text();
-    const videoList: Array<{ id: string; title: string; img: string; playUrl: string; score: string }> = [];
+    const videoList: VideoCard[] = [];
     const seenIds = new Set<string>();
 
     const cardRegex = /<a\s+class="[^"]*(?:vodlist_thumb|zbvodlist_box)[^"]*"\s+[^>]*href="([^"]+)"\s+title="([^"]+)"\s+data-original="([^"]+)"/g;
@@ -147,40 +119,74 @@ app.get('/api/videos', async (c) => {
         id,
         title: title.trim(),
         img: proxiedImg,
-        playUrl: `/play/${id}`,
-        score: (8.0 + (parseInt(id) % 15) * 0.1).toFixed(1)
+        playUrl: `/play/${id}?source=olevod`,
+        score: (8.0 + (parseInt(id) % 15) * 0.1).toFixed(1),
+        source: 'olevod',
+        sourceName: '欧乐影视',
+        badge: 'HD',
       });
     }
-
-    return c.json({
-      success: true,
-      isHome: false,
-      count: videoList.length,
-      page: parseInt(page),
-      type,
-      data: videoList,
-    });
-
-  } catch (error: any) {
-    return c.json(
-      { success: false, error: '抓取失败', message: error.message },
-      500
-    );
+    return videoList;
+  } catch (e) {
+    return [];
   }
-});
+}
 
-// 2. /api/video/:id - 视频详情与播放解析
-app.get('/api/video/:id', async (c) => {
-  const id = c.req.param('id');
-  const url = new URL(c.req.url);
-  const origin = url.origin;
-  const sid = c.req.query('sid') || '1';
-  const nid = c.req.query('nid') || '1';
+async function fetchOlevodCategory(origin: string, type: string, page = '1'): Promise<VideoCard[]> {
+  const targetUrl = page !== '1'
+    ? `https://olevod.com/index.php/vod/show/id/${type}/page/${page}.html`
+    : `https://olevod.com/index.php/vod/show/id/${type}.html`;
 
+  try {
+    const response = await fetch(targetUrl, {
+      headers: { 'User-Agent': USER_AGENT },
+    });
+    if (!response.ok) return [];
+
+    const html = await response.text();
+    const videoList: VideoCard[] = [];
+    const seenIds = new Set<string>();
+
+    const cardRegex = /<a\s+class="[^"]*(?:vodlist_thumb|zbvodlist_box)[^"]*"\s+[^>]*href="([^"]+)"\s+title="([^"]+)"\s+data-original="([^"]+)"/g;
+    let match;
+    while ((match = cardRegex.exec(html)) !== null) {
+      const [, href, title, rawImg] = match;
+      const idMatch = href.match(/\/id\/(\d+)/);
+      if (!idMatch) continue;
+
+      const id = idMatch[1];
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      let img = rawImg;
+      if (img.startsWith('/')) {
+        img = `https://olevod.com${img}`;
+      }
+
+      const proxiedImg = `${origin}/api/proxy-img?url=${encodeURIComponent(img)}`;
+
+      videoList.push({
+        id,
+        title: title.trim(),
+        img: proxiedImg,
+        playUrl: `/play/${id}?source=olevod`,
+        score: (8.0 + (parseInt(id) % 15) * 0.1).toFixed(1),
+        source: 'olevod',
+        sourceName: '欧乐影视',
+        badge: 'HD',
+      });
+    }
+    return videoList;
+  } catch (e) {
+    return [];
+  }
+}
+
+async function fetchOlevodDetail(origin: string, id: string, sid = '1', nid = '1') {
   const targetUrls = [
     `https://olevod.com/index.php/vod/play/id/${id}/sid/${sid}/nid/${nid}.html`,
     `https://olevod.com/index.php/vod/play/id/${id}/sid/1/nid/1.html`,
-    `https://olevod.com/index.php/vod/detail/id/${id}.html`
+    `https://olevod.com/index.php/vod/detail/id/${id}.html`,
   ];
 
   const headers = {
@@ -202,9 +208,7 @@ app.get('/api/video/:id', async (c) => {
           break;
         }
       }
-    } catch (e) {
-      // 忽略单个错误
-    }
+    } catch (e) {}
   }
 
   let rawVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
@@ -242,7 +246,7 @@ app.get('/api/video/:id', async (c) => {
     while ((itemMatch = episodeRegex.exec(html)) !== null) {
       const [, playId, playSid, playNid, rawName] = itemMatch;
       const name = rawName.trim();
-      
+
       const key = `${playSid}_${playNid}`;
       if (!seenNids.has(key)) {
         seenNids.add(key);
@@ -258,21 +262,337 @@ app.get('/api/video/:id', async (c) => {
 
   const proxiedVideoUrl = `${origin}/api/proxy-m3u8?url=${encodeURIComponent(rawVideoUrl)}`;
 
-  return c.json({
+  return {
     success: true,
+    source: 'olevod' as const,
+    sourceName: '欧乐影视',
     title: videoTitle || `影片 ${id}`,
     videoUrl: proxiedVideoUrl,
     rawVideoUrl,
     currentSid: sid,
     currentNid: nid,
     playlist: playlist.length > 0 ? playlist : [{ name: '第01集', id, sid: '1', nid: '1' }],
+  };
+}
+
+// -------------------------------------------------------------
+// 2. 4K 影视 (4kvm.net) 解析模块
+// -------------------------------------------------------------
+async function fetch4kvmSearch(origin: string, wd: string, page = '1'): Promise<VideoCard[]> {
+  const targetUrl = page !== '1'
+    ? `https://www.4kvm.net/search?q=${encodeURIComponent(wd)}&page=${page}`
+    : `https://www.4kvm.net/search?q=${encodeURIComponent(wd)}`;
+
+  try {
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Referer': 'https://www.4kvm.net/',
+      },
+    });
+    if (!res.ok) return [];
+
+    const html = await res.text();
+    const videoList: VideoCard[] = [];
+    const seenIds = new Set<string>();
+
+    const cardRegex = /<a\s+href="\/play\/([a-zA-Z0-9]+)"[\s\S]*?<img\s+[^>]*data-src="([^"]+)"[\s\S]*?alt="([^"]+)"[\s\S]*?<\/a>/g;
+    let match;
+    while ((match = cardRegex.exec(html)) !== null) {
+      const [, id, rawImg, rawTitle] = match;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      const title = rawTitle.replace(/&amp;/g, '&').trim();
+      let img = rawImg.replace(/&amp;/g, '&');
+      if (img.startsWith('//')) img = `https:${img}`;
+      const proxiedImg = `${origin}/api/proxy-img?url=${encodeURIComponent(img)}`;
+
+      // 提取年份与 4k 标识
+      const cardSegment = match[0];
+      const yearMatch = cardSegment.match(/top-2\s+left-2[^>]*>\s*(\d{4})\s*</);
+      const year = yearMatch ? yearMatch[1] : undefined;
+
+      const is4k = cardSegment.includes('4k') || cardSegment.includes('4K');
+
+      videoList.push({
+        id,
+        title,
+        img: proxiedImg,
+        playUrl: `/play/${id}?source=4kvm`,
+        score: '9.2',
+        source: '4kvm',
+        sourceName: '4K影视',
+        badge: is4k ? '4K' : '1080P',
+        year,
+      });
+    }
+
+    return videoList;
+  } catch (e) {
+    return [];
+  }
+}
+
+async function fetch4kvmDetail(origin: string, id: string, nid = '1', sid = '1') {
+  const targetUrl = `https://www.4kvm.net/play/${id}`;
+  const res = await fetch(targetUrl, {
+    headers: {
+      'User-Agent': USER_AGENT,
+      'Referer': 'https://www.4kvm.net/',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
   });
+
+  if (!res.ok) {
+    throw new Error(`4kvm play page returned HTTP ${res.status}`);
+  }
+
+  const html = await res.text();
+
+  // 1. 提取签名依赖参数
+  const nbStMatch = html.match(/<meta id="nb-st" content="([^"]+)">/);
+  const nbSt = nbStMatch ? nbStMatch[1] : String(Date.now());
+
+  const userlinkMatch = html.match(/userlink:'([^']+)'/);
+  const userlink = userlinkMatch ? userlinkMatch[1] : '0';
+
+  // 2. 提取片名
+  let videoTitle = '';
+  const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+  if (titleMatch) {
+    videoTitle = titleMatch[1].split('-')[0].trim();
+  }
+
+  // 3. 提取选集列表
+  const epRegex = /<a\s+[^>]*href="\/play\/([a-zA-Z0-9]+)"[^>]*dataid="(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  const playlist: Array<{ name: string; id: string; dataid: string; nid: string; sid: string }> = [];
+  const seenSlugs = new Set<string>();
+
+  while ((m = epRegex.exec(html)) !== null) {
+    const [, epSlug, dataid, innerHtml] = m;
+    if (seenSlugs.has(epSlug)) continue;
+    seenSlugs.add(epSlug);
+
+    const spanMatch = innerHtml.match(/<span[^>]*>([\s\S]*?)<\/span>/);
+    let epName = '';
+    if (spanMatch) {
+      epName = spanMatch[1].replace(/<[^>]+>/g, '').trim();
+    }
+    if (!epName) {
+      epName = innerHtml.replace(/<[^>]+>/g, '').trim();
+    }
+    if (!epName || epName.length > 20) {
+      epName = `第${playlist.length + 1}集`;
+    } else if (/^\d+$/.test(epName)) {
+      epName = `第${epName}集`;
+    }
+
+    playlist.push({
+      id: epSlug,
+      dataid,
+      nid: String(playlist.length + 1),
+      sid: '1',
+      name: epName,
+    });
+  }
+
+  // 4. 定位当前集与 dataid
+  let activeEpisode = playlist.find(p => p.id === id);
+  if (!activeEpisode) {
+    activeEpisode = playlist.find(p => p.nid === nid) || playlist[0];
+  }
+
+  const currentDataid = activeEpisode?.dataid || '0';
+  const currentSecretKey = activeEpisode?.id || id;
+  const currentNid = activeEpisode?.nid || nid;
+
+  // 5. Wasm 生成签名播放 URL
+  let signedPlayPath = '';
+  try {
+    signedPlayPath = await build4kvmPlayUrl(currentDataid, currentSecretKey, '1080', userlink, nbSt);
+  } catch (e: any) {
+    console.error('Wasm sign failed:', e);
+  }
+
+  let rawVideoUrl = '';
+  if (signedPlayPath) {
+    try {
+      const fullPlayApiUrl = `https://www.4kvm.net${signedPlayPath}`;
+      const playApiRes = await fetch(fullPlayApiUrl, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Referer': targetUrl,
+          'Accept': 'application/json, text/plain, */*',
+        },
+      });
+
+      if (playApiRes.ok) {
+        const playJson = (await playApiRes.json()) as any;
+        if (playJson.code === 200 && playJson.data?.quality_urls) {
+          const unlocked = playJson.data.quality_urls.filter((q: any) => !q.locked && q.url && q.url.startsWith('http'));
+          if (unlocked.length > 0) {
+            // 优先选择 1080p 或最高可用流
+            rawVideoUrl = unlocked[unlocked.length - 1].url;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch 4kvm stream JSON:', err);
+    }
+  }
+
+  const proxiedVideoUrl = rawVideoUrl ? `${origin}/api/proxy-m3u8?url=${encodeURIComponent(rawVideoUrl)}` : '';
+
+  return {
+    success: true,
+    source: '4kvm' as const,
+    sourceName: '4K影视',
+    title: videoTitle || `4K影片 ${id}`,
+    videoUrl: proxiedVideoUrl,
+    rawVideoUrl,
+    currentSid: '1',
+    currentNid,
+    playlist: playlist.length > 0 ? playlist : [{ name: '正片', id, dataid: currentDataid, sid: '1', nid: '1' }],
+  };
+}
+
+// -------------------------------------------------------------
+// 3. API 路由定义
+// -------------------------------------------------------------
+
+// /api/videos - 视频列表与多源聚合检索
+app.get('/api/videos', async (c) => {
+  const url = new URL(c.req.url);
+  const origin = url.origin;
+  const type = c.req.query('type');
+  const page = c.req.query('page') || '1';
+  const wd = c.req.query('wd');
+  const source = c.req.query('source') || 'all'; // 'all' | 'olevod' | '4kvm'
+
+  // A. 首页模式（无 type 且无 wd）
+  if (!type && !wd) {
+    const [shortDramas, movies, series, variety, anime] = await Promise.all([
+      fetchOlevodCategoryItems(origin, '1207', 6), // 短剧
+      fetchOlevodCategoryItems(origin, '1', 12),   // 电影
+      fetchOlevodCategoryItems(origin, '2', 12),   // 电视剧
+      fetchOlevodCategoryItems(origin, '3', 6),    // 综艺
+      fetchOlevodCategoryItems(origin, '4', 6),    // 动漫
+    ]);
+
+    return c.json({
+      success: true,
+      isHome: true,
+      sections: [
+        { typeId: '1207', title: '🔥 热门微短剧', data: shortDramas },
+        { typeId: '1', title: '🎬 热门电影推荐', data: movies },
+        { typeId: '2', title: '📺 热门电视剧场', data: series },
+        { typeId: '3', title: '🎪 精彩综艺热播', data: variety },
+        { typeId: '4', title: '✨ 热门动漫推荐', data: anime },
+      ],
+    });
+  }
+
+  // B. 搜索模式 (存在 wd)
+  if (wd) {
+    try {
+      if (source === '4kvm') {
+        const results4k = await fetch4kvmSearch(origin, wd, page);
+        return c.json({
+          success: true,
+          isHome: false,
+          source: '4kvm',
+          count: results4k.length,
+          total4kvm: results4k.length,
+          totalOlevod: 0,
+          page: parseInt(page),
+          data: results4k,
+        });
+      }
+
+      if (source === 'olevod') {
+        const resultsOle = await fetchOlevodSearch(origin, wd, page);
+        return c.json({
+          success: true,
+          isHome: false,
+          source: 'olevod',
+          count: resultsOle.length,
+          total4kvm: 0,
+          totalOlevod: resultsOle.length,
+          page: parseInt(page),
+          data: resultsOle,
+        });
+      }
+
+      // 聚合双源检索 (source === 'all')
+      const [oleRes, res4k] = await Promise.allSettled([
+        fetchOlevodSearch(origin, wd, page),
+        fetch4kvmSearch(origin, wd, page),
+      ]);
+
+      const oleData = oleRes.status === 'fulfilled' ? oleRes.value : [];
+      const data4k = res4k.status === 'fulfilled' ? res4k.value : [];
+
+      // 聚合排列：优先展示 4K 影视结果，随后展示欧乐影视
+      const combined = [...data4k, ...oleData];
+
+      return c.json({
+        success: true,
+        isHome: false,
+        source: 'all',
+        count: combined.length,
+        total4kvm: data4k.length,
+        totalOlevod: oleData.length,
+        page: parseInt(page),
+        data: combined,
+      });
+    } catch (error: any) {
+      return c.json({ success: false, error: '搜索失败', message: error.message }, 500);
+    }
+  }
+
+  // C. 单分类浏览模式 (存在 type)
+  try {
+    const videoList = await fetchOlevodCategory(origin, type || '1', page);
+    return c.json({
+      success: true,
+      isHome: false,
+      count: videoList.length,
+      page: parseInt(page),
+      type: type || '1',
+      data: videoList,
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: '抓取失败', message: error.message }, 500);
+  }
 });
 
-// 3. /api/proxy-img - 图片代理
+// /api/video/:id - 视频详情与流解析
+app.get('/api/video/:id', async (c) => {
+  const id = c.req.param('id');
+  const url = new URL(c.req.url);
+  const origin = url.origin;
+  const source = c.req.query('source') || 'olevod';
+  const sid = c.req.query('sid') || '1';
+  const nid = c.req.query('nid') || '1';
+
+  try {
+    if (source === '4kvm') {
+      const data = await fetch4kvmDetail(origin, id, nid, sid);
+      return c.json(data);
+    }
+
+    const data = await fetchOlevodDetail(origin, id, sid, nid);
+    return c.json(data);
+  } catch (error: any) {
+    return c.json({ success: false, error: '详情解析失败', message: error.message }, 500);
+  }
+});
+
+// /api/proxy-img - 图片代理（防盗链绕过与缓存）
 app.get('/api/proxy-img', async (c) => {
   const targetUrl = c.req.query('url');
-
   if (!targetUrl) {
     return c.text('Missing "url" parameter', 400);
   }
@@ -283,14 +603,18 @@ app.get('/api/proxy-img', async (c) => {
       fullUrl = `https:${fullUrl}`;
     }
 
-    const res = await fetch(fullUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Referer': 'https://olevod.com/',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      },
-    });
+    const headers: Record<string, string> = {
+      'User-Agent': USER_AGENT,
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+    };
 
+    if (fullUrl.includes('olevod.com')) {
+      headers['Referer'] = 'https://olevod.com/';
+    } else if (fullUrl.includes('4kvm') || fullUrl.includes('baidu.com') || fullUrl.includes('staticimgjs.org')) {
+      headers['Referer'] = 'https://www.4kvm.net/';
+    }
+
+    const res = await fetch(fullUrl, { headers });
     if (!res.ok) {
       return c.text(`Image fetch failed: ${res.status}`, res.status as any);
     }
@@ -310,7 +634,7 @@ app.get('/api/proxy-img', async (c) => {
   }
 });
 
-// 4. /api/proxy-m3u8 - M3U8 及视频切片代理
+// /api/proxy-m3u8 - M3U8 及视频切片代理
 app.get('/api/proxy-m3u8', async (c) => {
   const url = new URL(c.req.url);
   const origin = url.origin;
@@ -331,11 +655,17 @@ app.get('/api/proxy-m3u8', async (c) => {
     const baseUrl = `${targetParsed.protocol}//${targetParsed.host}${targetParsed.pathname.substring(0, targetParsed.pathname.lastIndexOf('/') + 1)}`;
 
     const proxyHeaders = new Headers();
-    proxyHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-    proxyHeaders.set('Referer', 'https://olevod.com/');
-    proxyHeaders.set('Origin', 'https://olevod.com');
+    proxyHeaders.set('User-Agent', USER_AGENT);
     proxyHeaders.set('Accept', '*/*');
     proxyHeaders.set('X-Forwarded-For', '103.21.244.1');
+
+    if (fullUrl.includes('douyinbit.com') || fullUrl.includes('4kvm')) {
+      proxyHeaders.set('Referer', 'https://www.4kvm.net/');
+      proxyHeaders.set('Origin', 'https://www.4kvm.net');
+    } else {
+      proxyHeaders.set('Referer', 'https://olevod.com/');
+      proxyHeaders.set('Origin', 'https://olevod.com');
+    }
 
     const fetchOptions: RequestInit & { cf?: any } = {
       headers: proxyHeaders,
@@ -343,7 +673,7 @@ app.get('/api/proxy-m3u8', async (c) => {
         cacheEverything: true,
         cacheTtl: isM3u8 ? 10 : 86400,
         cacheEverythingByHeader: true,
-      }
+      },
     };
 
     const response = await fetch(fullUrl, fetchOptions);
@@ -357,7 +687,7 @@ app.get('/api/proxy-m3u8', async (c) => {
     if (isM3u8 || contentType.includes('mpegurl') || contentType.includes('apple')) {
       const content = await response.text();
       const lines = content.split('\n');
-      
+
       const rewrittenLines = lines.map(line => {
         const trimmed = line.trim();
         if (!trimmed || (trimmed.startsWith('#') && !trimmed.startsWith('#EXT-X-KEY'))) {
@@ -395,7 +725,6 @@ app.get('/api/proxy-m3u8', async (c) => {
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });
-
   } catch (error: any) {
     return c.text(`Edge Proxy Error: ${error.message}`, 500);
   }

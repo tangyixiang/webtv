@@ -7,6 +7,10 @@ interface VideoItem {
   img: string;
   playUrl: string;
   score: string;
+  source?: 'olevod' | '4kvm';
+  sourceName?: string;
+  badge?: string;
+  year?: string;
 }
 
 interface HomeSection {
@@ -64,10 +68,15 @@ export default function HomePage() {
   const pageStr = searchParams.get('page') || '1';
   const page = parseInt(pageStr) || 1;
   const wd = searchParams.get('wd') || '';
+  const currentSource = searchParams.get('source') || 'all';
 
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [singleCategoryVideos, setSingleCategoryVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sourceStats, setSourceStats] = useState<{ total4kvm: number; totalOlevod: number }>({
+    total4kvm: 0,
+    totalOlevod: 0,
+  });
 
   const isMovieType = type === '1' || (parseInt(type) >= 101 && parseInt(type) <= 113);
   const isTvType = type === '2' || ['201', '202', '203', '204', '1207'].includes(type);
@@ -83,7 +92,7 @@ export default function HomePage() {
   };
 
   const getTitle = () => {
-    if (wd) return `搜索 “${wd}” 的结果`;
+    if (wd) return `搜索 “${wd}” 的全网片源结果`;
     const allSubs = [...MOVIE_SUB_CATEGORIES, ...TV_SUB_CATEGORIES, ...VARIETY_SUB_CATEGORIES, ...ANIME_SUB_CATEGORIES];
     const matched = allSubs.find(c => c.id === type);
     if (matched) return matched.name;
@@ -96,16 +105,24 @@ export default function HomePage() {
       try {
         let url = `/api/videos?page=${page}`;
         if (type) url += `&type=${type}`;
-        if (wd) url += `&wd=${encodeURIComponent(wd)}`;
+        if (wd) {
+          url += `&wd=${encodeURIComponent(wd)}&source=${currentSource}`;
+        }
 
         const res = await fetch(url);
         const json = (await res.json()) as any;
-        
+
         if (json.success) {
           if (json.isHome && json.sections) {
             setSections(json.sections);
           } else if (Array.isArray(json.data)) {
             setSingleCategoryVideos(json.data);
+            if (json.total4kvm !== undefined || json.totalOlevod !== undefined) {
+              setSourceStats({
+                total4kvm: json.total4kvm || 0,
+                totalOlevod: json.totalOlevod || 0,
+              });
+            }
           }
         }
       } catch (err) {
@@ -116,7 +133,7 @@ export default function HomePage() {
     }
 
     fetchData();
-  }, [type, page, wd]);
+  }, [type, page, wd, currentSource]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1) return;
@@ -125,50 +142,80 @@ export default function HomePage() {
     navigate(`/?${params.toString()}`);
   };
 
-  const renderVideoCard = (video: VideoItem) => (
-    <Link to={video.playUrl} key={video.id}>
-      <div className="glass-card rounded-lg overflow-hidden group cursor-pointer relative transition-all duration-300 hover:scale-105">
-        <div className="absolute top-2 right-2 bg-blue-600/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded z-10 shadow-md backdrop-blur-sm">
-          HD {video.score}
-        </div>
-        
-        <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-800">
-          <img 
-            src={video.img} 
-            alt={video.title} 
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-            loading="lazy"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-            <div className="w-12 h-12 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
-              <svg className="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
+  const handleSourceFilterChange = (sourceKey: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (sourceKey === 'all') {
+      params.delete('source');
+    } else {
+      params.set('source', sourceKey);
+    }
+    params.set('page', '1');
+    navigate(`/?${params.toString()}`);
+  };
+
+  const renderVideoCard = (video: VideoItem) => {
+    const is4kvm = video.source === '4kvm';
+
+    return (
+      <Link to={video.playUrl} key={`${video.source || 'ole'}_${video.id}`}>
+        <div className="glass-card rounded-lg overflow-hidden group cursor-pointer relative transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/10">
+          
+          {/* Top-Left Source Tag */}
+          <div className="absolute top-2 left-2 z-10">
+            {is4kvm ? (
+              <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md backdrop-blur-sm flex items-center gap-0.5">
+                <span className="text-[9px]">🌟</span> 4K影视
+              </span>
+            ) : (
+              <span className="bg-blue-600/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md backdrop-blur-sm flex items-center gap-0.5">
+                <span className="text-[9px]">🎬</span> 欧乐源
+              </span>
+            )}
+          </div>
+
+          {/* Top-Right Quality / Score */}
+          <div className="absolute top-2 right-2 bg-slate-950/80 text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded z-10 shadow-md backdrop-blur-sm border border-slate-700/50">
+            {video.badge || 'HD'} {video.score}
+          </div>
+
+          <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-800">
+            <img
+              src={video.img}
+              alt={video.title}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                <svg className="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-3">
-          <h3 className="font-semibold text-sm text-slate-100 truncate group-hover:text-blue-400 transition-colors">
-            {video.title}
-          </h3>
-          <p className="text-xs text-slate-400 mt-1 flex justify-between items-center">
-            <span>正片高清</span>
-            <span className="text-blue-400/80">立即播放</span>
-          </p>
+          <div className="p-3">
+            <h3 className="font-semibold text-sm text-slate-100 truncate group-hover:text-blue-400 transition-colors" title={video.title}>
+              {video.title}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1 flex justify-between items-center">
+              <span>{video.year ? `${video.year} · ` : ''}{is4kvm ? '4K/1080P' : '正片高清'}</span>
+              <span className="text-blue-400/80 group-hover:text-blue-300 font-medium">去播放 →</span>
+            </p>
+          </div>
         </div>
-      </div>
-    </Link>
-  );
+      </Link>
+    );
+  };
 
   const subCategories = getSubCategories();
 
   return (
     <div className="min-h-screen pb-16">
-      {/* Secondary Sub-Category Filter Bar */}
+      {/* Secondary Sub-Category Filter Bar (Home & Categories) */}
       {subCategories.length > 0 && !wd && (
         <div className="bg-slate-900/60 border-b border-slate-800/80 sticky top-16 z-40 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 overflow-x-auto no-scrollbar flex items-center space-x-2">
@@ -180,8 +227,8 @@ export default function HomePage() {
                   key={sub.id}
                   to={`/?type=${sub.id}`}
                   className={`text-xs px-3 py-1.5 rounded-full transition-all whitespace-nowrap font-medium ${
-                    isActive 
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                       : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
@@ -193,13 +240,57 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Search Source Switcher Tab (Only shown in search mode) */}
+      {wd && (
+        <div className="bg-slate-900/80 border-b border-slate-800/80 sticky top-16 z-40 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 overflow-x-auto no-scrollbar flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-slate-400 font-medium whitespace-nowrap mr-1">数据源筛选:</span>
+              <button
+                onClick={() => handleSourceFilterChange('all')}
+                className={`text-xs px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap font-medium cursor-pointer ${
+                  currentSource === 'all'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                全部聚合 {sourceStats.total4kvm + sourceStats.totalOlevod > 0 && `(${sourceStats.total4kvm + sourceStats.totalOlevod})`}
+              </button>
+              <button
+                onClick={() => handleSourceFilterChange('4kvm')}
+                className={`text-xs px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap font-medium cursor-pointer ${
+                  currentSource === '4kvm'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+                    : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                🌟 4K 影视 {sourceStats.total4kvm > 0 && `(${sourceStats.total4kvm})`}
+              </button>
+              <button
+                onClick={() => handleSourceFilterChange('olevod')}
+                className={`text-xs px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap font-medium cursor-pointer ${
+                  currentSource === 'olevod'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                🎬 欧乐影视 {sourceStats.totalOlevod > 0 && `(${sourceStats.totalOlevod})`}
+              </button>
+            </div>
+            <div className="hidden sm:block text-xs text-slate-400">
+              共检索到 {singleCategoryVideos.length} 条匹配结果
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-32 space-y-4">
             <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-slate-400 animate-pulse">加载全网最新海量高清影视资源...</p>
+            <p className="text-sm text-slate-400 animate-pulse">全网聚合检索海量超清影视中...</p>
           </div>
-        ) : (!type && !wd) ? (
+        ) : !type && !wd ? (
           /* 【首页模式】：展示各版块热门视频分组 */
           <div className="space-y-10">
             {sections.map((section) => (
@@ -208,7 +299,7 @@ export default function HomePage() {
                   <h2 className="text-xl font-bold text-slate-100 flex items-center">
                     {section.title}
                   </h2>
-                  <Link 
+                  <Link
                     to={`/?type=${section.typeId}`}
                     className="text-xs text-blue-400 hover:text-blue-300 flex items-center transition-colors font-medium"
                   >
@@ -236,7 +327,7 @@ export default function HomePage() {
             {singleCategoryVideos.length === 0 ? (
               <div className="text-center py-24 text-slate-400">
                 <p className="text-lg">暂未搜索到匹配的相关影片</p>
-                <p className="text-xs text-slate-500 mt-2">建议缩短关键字或尝试其他影片名称</p>
+                <p className="text-xs text-slate-500 mt-2">建议缩短关键字或尝试切换顶部数据源</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">

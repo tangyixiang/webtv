@@ -4,10 +4,11 @@
 
 ## 架构亮点
 
-- ⚡️ **超强性能**：Worker 代码体积 < 100KB，边缘节点冷启动低于 5ms。
-- 🛡️ **边缘中转代理**：全面内置 `/api/proxy-img`（图片代理缓存）与 `/api/proxy-m3u8`（M3U8 重写及 TS 切片强缓存），无缝解决跨域与播放卡顿问题。
-- 🎨 **现代化 UI**：暗色微光玻璃态（Glassmorphism）设计，支持响应式导航、多分类筛选与实时搜索。
-- 🎬 **流畅播放**：集成 ArtPlayer 播放器与 HLS.js，支持高清/多码率切换与无刷新后台切集。
+- ⚡️ **超强性能**：Worker 边缘节点冷启动低于 5ms，静态资源托管于 Cloudflare Global CDN。
+- 🌟 **双数据源聚合**：已完整接入 **4K 影视 (`4kvm.net`)** 与 **欧乐影视 (`olevod.com`)**，支持搜索时自动聚合双源或单源筛选，并在卡片与播放器中清晰标记数据来源。
+- 🛡️ **边缘 WebAssembly 解密 & 媒体代理**：内置 WebAssembly 播放凭据自动签名器，全面内置 `/api/proxy-img` 与 `/api/proxy-m3u8`（M3U8 重写及 TS 切片强缓存），无缝解决跨域、防盗链与播放卡顿问题。
+- 🎨 **现代化 UI**：暗色微光玻璃态（Glassmorphism）设计，支持响应式导航、多分类筛选、来源切换 Tab 与实时搜索。
+- 🎬 **流畅播放**：集成 ArtPlayer 播放器与 HLS.js，支持高清/多码率切换与无刷新后台切集、一键搜索换源。
 
 ## 本地开发与使用
 
@@ -42,9 +43,11 @@ npm run deploy
 ├── dist/               # Vite 静态编译产物 (Cloudflare Worker 托管)
 ├── public/             # 静态图标与资源
 ├── src/
-│   ├── components/     # React 界面组件 (Navbar, VideoPlayer)
-│   ├── pages/          # 页面 (HomePage, PlayPage)
-│   ├── worker/         # Cloudflare Worker API (index.ts 基于 Hono)
+│   ├── components/     # React 界面组件 (Navbar, VideoPlayer, ProtectedRoute)
+│   ├── pages/          # 页面 (HomePage, PlayPage, LoginPage)
+│   ├── worker/         # Cloudflare Worker API
+│   │   ├── index.ts    # Hono 路由、爬虫解析与代理网关
+│   │   └── wasm-signer.ts # 4kvm Wasm 签名生成器
 │   ├── App.tsx         # 应用主组件与路由管理
 │   ├── index.css       # Tailwind CSS & 玻璃态样式
 │   └── main.tsx        # SPA 入口挂载
