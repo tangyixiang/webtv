@@ -59,7 +59,7 @@ export default function Navbar() {
                 type="text" 
                 value={searchWd}
                 onChange={(e) => setSearchWd(e.target.value)}
-                placeholder="搜索你想看的影片..." 
+                placeholder="搜索影片..." 
                 className="bg-slate-800/80 border border-slate-700 text-sm rounded-full px-4 py-1.5 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all w-56" 
               />
               <button type="submit" className="absolute right-2.5 top-2 text-gray-400 hover:text-white cursor-pointer">
@@ -122,7 +122,7 @@ export default function Navbar() {
                 type="text" 
                 value={searchWd}
                 onChange={(e) => setSearchWd(e.target.value)}
-                placeholder="全网搜索片名、演员、关键字..." 
+                placeholder="搜索影片..." 
                 className="w-full bg-slate-900 border border-blue-500/50 text-sm rounded-lg pl-3 pr-10 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                 autoFocus
               />

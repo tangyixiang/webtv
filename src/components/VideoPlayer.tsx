@@ -16,7 +16,7 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
     if (!container) return;
 
     if (!src) {
-      setError('该视频流地址解析中或该源暂未提供有效播放流，请尝试点击【🔄 搜索换源】更换其他源播放');
+      setError('视频源解析失败，请尝试搜索换源');
       return;
     }
 
@@ -134,9 +134,9 @@ export default function VideoPlayer({ src }: VideoPlayerProps) {
           {
             name: 'reload-btn',
             position: 'right',
-            html: '<span style="cursor:pointer;font-size:12px;padding:2px 8px;background:rgba(37,99,235,0.8);border-radius:4px;color:#fff;">🔄 重新加载</span>',
+            html: '<span style="cursor:pointer;font-size:12px;padding:2px 8px;background:rgba(37,99,235,0.8);border-radius:4px;color:#fff;">重新加载</span>',
             click: function (artInstance: any) {
-              (artInstance as any).notice?.show?.('正在重新加载视频流...');
+              (artInstance as any).notice?.show?.('重新加载中...');
               if ((artInstance as any).hls) {
                 const currentTime = artInstance.video.currentTime;
                 (artInstance as any).hls.destroy();

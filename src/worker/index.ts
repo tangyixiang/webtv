@@ -224,7 +224,7 @@ async function fetchOlevodDetail(origin: string, id: string, sid = '1', nid = '1
     } catch (e) {}
   }
 
-  let rawVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+  let rawVideoUrl = '';
   let videoTitle = '';
 
   if (fetchedOk && html) {
@@ -273,7 +273,7 @@ async function fetchOlevodDetail(origin: string, id: string, sid = '1', nid = '1
     }
   }
 
-  const proxiedVideoUrl = `${origin}/api/proxy-m3u8?url=${encodeURIComponent(rawVideoUrl)}`;
+  const proxiedVideoUrl = rawVideoUrl ? `${origin}/api/proxy-m3u8?url=${encodeURIComponent(rawVideoUrl)}` : '';
 
   return {
     success: true,
@@ -513,11 +513,11 @@ app.get('/api/videos', async (c) => {
       success: true,
       isHome: true,
       sections: [
-        { typeId: '1207', title: '🔥 热门微短剧', data: shortDramas },
-        { typeId: '1', title: '🎬 热门电影推荐', data: movies },
-        { typeId: '2', title: '📺 热门电视剧场', data: series },
-        { typeId: '3', title: '🎪 精彩综艺热播', data: variety },
-        { typeId: '4', title: '✨ 热门动漫推荐', data: anime },
+        { typeId: '1207', title: '热门微短剧', data: shortDramas },
+        { typeId: '1', title: '热门电影推荐', data: movies },
+        { typeId: '2', title: '热门电视剧场', data: series },
+        { typeId: '3', title: '精彩综艺热播', data: variety },
+        { typeId: '4', title: '热门动漫推荐', data: anime },
       ],
     });
   }

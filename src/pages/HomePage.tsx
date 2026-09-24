@@ -92,7 +92,7 @@ export default function HomePage() {
   };
 
   const getTitle = () => {
-    if (wd) return `搜索 “${wd}” 的全网片源结果`;
+    if (wd) return `“${wd}” 搜索结果`;
     const allSubs = [...MOVIE_SUB_CATEGORIES, ...TV_SUB_CATEGORIES, ...VARIETY_SUB_CATEGORIES, ...ANIME_SUB_CATEGORIES];
     const matched = allSubs.find(c => c.id === type);
     if (matched) return matched.name;
@@ -163,12 +163,12 @@ export default function HomePage() {
           {/* Top-Left Source Tag */}
           <div className="absolute top-2 left-2 z-10">
             {is4kvm ? (
-              <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md backdrop-blur-sm flex items-center gap-0.5">
-                <span className="text-[9px]">🌟</span> 4K影视
+              <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md backdrop-blur-sm">
+                4K影视
               </span>
             ) : (
-              <span className="bg-blue-600/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md backdrop-blur-sm flex items-center gap-0.5">
-                <span className="text-[9px]">🎬</span> 欧乐源
+              <span className="bg-blue-600/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md backdrop-blur-sm">
+                欧乐源
               </span>
             )}
           </div>
@@ -264,7 +264,7 @@ export default function HomePage() {
                     : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                🌟 4K 影视 {sourceStats.total4kvm > 0 && `(${sourceStats.total4kvm})`}
+                4K 影视 {sourceStats.total4kvm > 0 && `(${sourceStats.total4kvm})`}
               </button>
               <button
                 onClick={() => handleSourceFilterChange('olevod')}
@@ -274,11 +274,11 @@ export default function HomePage() {
                     : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                🎬 欧乐影视 {sourceStats.totalOlevod > 0 && `(${sourceStats.totalOlevod})`}
+                欧乐影视 {sourceStats.totalOlevod > 0 && `(${sourceStats.totalOlevod})`}
               </button>
             </div>
             <div className="hidden sm:block text-xs text-slate-400">
-              共检索到 {singleCategoryVideos.length} 条匹配结果
+              共 {singleCategoryVideos.length} 条结果
             </div>
           </div>
         </div>
@@ -288,10 +288,10 @@ export default function HomePage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-32 space-y-4">
             <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-slate-400 animate-pulse">全网聚合检索海量超清影视中...</p>
+            <p className="text-sm text-slate-400">加载中...</p>
           </div>
         ) : !type && !wd ? (
-          /* 【首页模式】：展示各版块热门视频分组 */
+          /* 首页模式：展示各版块热门视频分组 */
           <div className="space-y-10">
             {sections.map((section) => (
               <section key={section.typeId} className="space-y-4">
@@ -317,7 +317,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          /* 【单分类 / 搜索结果模式】：展示列表 + 分页导航 */
+          /* 单分类 / 搜索结果模式：展示列表 + 分页导航 */
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h2 className="text-xl font-bold text-slate-100">{getTitle()}</h2>
@@ -326,8 +326,7 @@ export default function HomePage() {
 
             {singleCategoryVideos.length === 0 ? (
               <div className="text-center py-24 text-slate-400">
-                <p className="text-lg">暂未搜索到匹配的相关影片</p>
-                <p className="text-xs text-slate-500 mt-2">建议缩短关键字或尝试切换顶部数据源</p>
+                <p className="text-sm text-slate-400">暂无相关影片</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">

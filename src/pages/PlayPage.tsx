@@ -96,7 +96,7 @@ export default function PlayPage() {
     return (
       <div className="min-h-screen bg-slate-950 pt-24 pb-12 flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-gray-400 text-sm">正在获取影片与解析高清数据流...</p>
+        <p className="text-gray-400 text-sm">加载中...</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export default function PlayPage() {
     return (
       <div className="min-h-screen bg-slate-950 pt-24 pb-12 text-center flex flex-col items-center justify-center p-4">
         <h2 className="text-xl font-bold text-white mb-2">获取视频失败</h2>
-        <p className="text-gray-400 mb-6">暂时无法获取到该视频的数据流，请尝试更换其他数据源或返回首页重试。</p>
+        <p className="text-gray-400 mb-6">视频获取失败，请尝试换源播放。</p>
         <Link to="/" className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors text-sm">
           返回首页
         </Link>
@@ -135,12 +135,12 @@ export default function PlayPage() {
 
           <div className="flex-shrink-0 ml-2">
             {is4kvm ? (
-              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
-                <span>🌟</span> 当前播放源：4K 影视
+              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs px-2.5 py-1 rounded-full font-medium">
+                4K 影视
               </span>
             ) : (
-              <span className="bg-blue-500/20 text-blue-300 border border-blue-500/40 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
-                <span>🎬</span> 当前播放源：欧乐影视
+              <span className="bg-blue-500/20 text-blue-300 border border-blue-500/40 text-xs px-2.5 py-1 rounded-full font-medium">
+                欧乐影视
               </span>
             )}
           </div>
@@ -156,7 +156,7 @@ export default function PlayPage() {
                 <div className="absolute inset-0 bg-black/60 z-20 flex items-center justify-center backdrop-blur-xs rounded-lg">
                   <div className="flex items-center space-x-2 text-white bg-slate-900/90 px-4 py-2 rounded-full shadow-lg border border-slate-700">
                     <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-xs">后台切集中...</span>
+                    <span className="text-xs">加载中...</span>
                   </div>
                 </div>
               )}
@@ -171,30 +171,26 @@ export default function PlayPage() {
                 
                 <div className="flex items-center space-x-2">
                   <Link
-                    to={`/?wd=${encodeURIComponent(videoData.title.split(' ')[0])}`}
-                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition flex items-center gap-1"
-                    title="在全网搜索切换其他播放源"
+                    to={`/?wd=${encodeURIComponent(videoData.title.trim().split(/\s+/)[0])}`}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition flex items-center gap-1.5"
                   >
-                    <span>🔄</span> 搜索换源
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>搜索换源</span>
                   </Link>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 my-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 mt-3">
                 <span className={`px-2 py-0.5 rounded font-medium ${is4kvm ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-800/50' : 'bg-blue-950/70 text-blue-400 border border-blue-800/50'}`}>
-                  {is4kvm ? '🌟 4K 影视超清源' : '🎬 欧乐影视高清源'}
+                  {is4kvm ? '4K 影视超清源' : '欧乐影视高清源'}
                 </span>
                 <span>·</span>
                 <span className="bg-slate-800 px-2 py-0.5 rounded text-blue-400">HLS 代理流</span>
                 <span>·</span>
-                <span>后台无刷新切集</span>
-                <span>·</span>
                 <span>共 {videoData.playlist.length} 集</span>
               </div>
-              
-              <p className="text-gray-300 text-xs md:text-sm leading-relaxed">
-                点击右侧集数按钮可实现后台无缝切换，无需刷新全页。播放卡顿可点击播放器右上角【🔄 重新加载】或尝试刷新。
-              </p>
             </div>
           </div>
 
